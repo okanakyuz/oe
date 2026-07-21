@@ -1,5 +1,7 @@
 #include <sys/ioctl.h>
 #include <ctype.h>
+#include <errno.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <termios.h>
@@ -62,7 +64,7 @@ editorRefreshScreen (void)
 	abAppend(&ab, "\x1b[2J", 4);
 	// move to buttom
 	char buf[32];
-	snprintf(buf, sizeof(buf), "\x1b[%d;1H", E.screenrows);
+	snprintf(buf, sizeof(buf), "\x1b[%d;1H", E.screenrows - 1);
 	abAppend(&ab, buf, strlen(buf));
 	editorDrawStatusBar(&ab);
 	// go left top
@@ -130,12 +132,19 @@ getWindowSize(int *rows, int *cols)
 }
 
 void
+handle_sigwinch(int sig)
+{
+        getWindowSize(&E.screenrows, &E.screencols);
+}
+
+void
 initEditor(void)
 {
 	if(getWindowSize(&E.screenrows, &E.screencols) == -1)
 	{	
 		die("getWindowSize");
 	}
+	signal(SIGWINCH, handle_sigwinch);
 }
 
 
@@ -152,7 +161,10 @@ main (int argc, char **argv)
                 char c= '\0';
                 if(read(STDIN_FILENO, &c, 1) == -1) 
 		{
-			die("read");
+			if (errno == EINTR)
+			{
+				die("read");
+			}
 		}
                 if (c == 'q')
                 {
