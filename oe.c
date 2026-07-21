@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <termios.h>
 #include <unistd.h>
-
+#include <string.h>
 
 struct editorConfig 
 {
@@ -15,12 +15,64 @@ struct editorConfig
 
 struct editorConfig E;
 
+struct abuf 
+{
+	char *b;
+	int len;
+};
+
+#define ABUF_INIT {NULL, 0}
+
+void
+abAppend(struct abuf *ab, const char *s, int len)
+{
+	char *new = realloc(ab->b, ab->len + len);
+	if (new == NULL) return;
+	memcpy(&new[ab->len], s, len);
+	ab->b = new;
+	ab->len += len;
+}
+
+void
+abFree(struct abuf *ab)
+{
+	free(ab->b);
+}
+
+void
+editorDrawStatusBar(struct abuf *ab)
+{
+        // reverse colors
+        abAppend(ab, "\x1b[7m", 4);
+        int i;
+        for (i = 0; i < E.screencols; i++)
+        {
+                abAppend(ab, " ", 1);
+        }
+        abAppend(ab, "\x1b[m", 3);
+}
 
 void 
 editorRefreshScreen (void)
 {
-	if (write(STDOUT_FILENO, "\x1b[2J", 4) == -1) exit(1);
-	if (write(STDOUT_FILENO, "\x1b[H", 3) == -1) exit(1);
+	struct abuf ab = ABUF_INIT;
+	// hide cursor
+	abAppend(&ab, "\x1b[?25l", 6);
+	// clean
+	abAppend(&ab, "\x1b[2J", 4);
+	// move to buttom
+	char buf[32];
+	snprintf(buf, sizeof(buf), "\x1b[%d;1H", E.screenrows);
+	abAppend(&ab, buf, strlen(buf));
+	editorDrawStatusBar(&ab);
+	// go left top
+	abAppend(&ab, "\x1b[H", 3);
+	// make cursor visible
+	abAppend(&ab, "\x1b[?25h", 6);
+
+	// write them all
+	if (write(STDOUT_FILENO, ab.b, ab.len) == -1) exit(1);
+	abFree(&ab);
 }
 
 void
@@ -73,6 +125,7 @@ getWindowSize(int *rows, int *cols)
 	{
 		*cols = ws.ws_col;
 		*rows = ws.ws_row;
+		return 0;
 	}
 }
 
