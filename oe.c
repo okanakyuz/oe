@@ -55,6 +55,17 @@ editorDrawStatusBar(struct abuf *ab)
 }
 
 void 
+editorDrawMessageBar(struct abuf *ab)
+{
+	char buf[32];
+	snprintf(buf, sizeof(buf), "\x1b[%d;1H", E.screenrows);
+	abAppend(ab, buf, strlen(buf));
+	
+	const char *msg = "--- OE Minibuffer (C-x C-c to quit) ---";
+	abAppend(ab, msg, strlen(msg));
+}
+
+void 
 editorRefreshScreen (void)
 {
 	struct abuf ab = ABUF_INIT;
@@ -66,7 +77,10 @@ editorRefreshScreen (void)
 	char buf[32];
 	snprintf(buf, sizeof(buf), "\x1b[%d;1H", E.screenrows - 1);
 	abAppend(&ab, buf, strlen(buf));
+
 	editorDrawStatusBar(&ab);
+	editorDrawMessageBar(&ab);
+
 	// go left top
 	abAppend(&ab, "\x1b[H", 3);
 	// make cursor visible
