@@ -1,53 +1,112 @@
+#include <sys/ioctl.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <termios.h>
 #include <unistd.h>
 
-struct termios orig_termios;
+
+struct editorConfig 
+{
+	int screenrows;
+	int screencols;
+	struct termios orig_termios;
+};
+
+struct editorConfig E;
+
 
 void 
-disableRawMode(void) 
+editorRefreshScreen (void)
 {
-	tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
+	if (write(STDOUT_FILENO, "\x1b[2J", 4) == -1) exit(1);
+	if (write(STDOUT_FILENO, "\x1b[H", 3) == -1) exit(1);
 }
 
 void
-enableRawMode(void) 
+die (const char *s)
 {
-	tcgetattr(STDIN_FILENO, &orig_termios);
-	atexit(disableRawMode);
-	struct termios raw = orig_termios;
-	raw.c_iflag &= ~(BRKINT| ICRNL | INPCK | ISTRIP | IXON);
-	raw.c_oflag &= ~(OPOST);
-	raw.c_cflag |= (CS8);
-	raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
-	raw.c_cc[VMIN] = 0;
-	raw.c_cc[VTIME] = 1;
-	tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+	editorRefreshScreen();
+	perror(s);
+	exit(1);
 }
 
-void 
-editorRefreshScreen(void)
+
+void
+disableRawMode(void)
 {
-	if(write(STDOUT_FILENO, "\x1b[2J", 4) == -1) exit(1);
-	if(write(STDOUT_FILENO, "\x1b[H", 3) == -1) exit(1);
+        if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1) 
+		die("tcsetattr") ;
 }
+
+void
+enableRawMode(void)
+{
+        if (tcgetattr(STDIN_FILENO, &E.orig_termios) == -1)
+	{
+		die("tcgetattr");
+	}
+        atexit(disableRawMode);
+        struct termios raw = E.orig_termios;
+        raw.c_iflag &= ~(BRKINT| ICRNL | INPCK | ISTRIP | IXON);
+        raw.c_oflag &= ~(OPOST);
+        raw.c_cflag |= (CS8);
+        raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+        raw.c_cc[VMIN] = 0;
+        raw.c_cc[VTIME] = 1;
+        if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1)
+	{
+		die("tcsetattr");
+	}
+}
+
 
 int 
-main (int argc, char **argv) 
+getWindowSize(int *rows, int *cols)
 {
-	enableRawMode();
-	while(1)
+	struct winsize ws;
+	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0)
 	{
-		editorRefreshScreen();
-		char c= '\0';
-		if(read(STDIN_FILENO, &c, 1) == -1) exit(1);
-		if (c == 'q')
-		{
-			editorRefreshScreen();
-			break;
-		}
+		return -1;
 	}
-	return EXIT_SUCCESS;
+	else
+	{
+		*cols = ws.ws_col;
+		*rows = ws.ws_row;
+	}
 }
+
+void
+initEditor(void)
+{
+	if(getWindowSize(&E.screenrows, &E.screencols) == -1)
+	{	
+		die("getWindowSize");
+	}
+}
+
+
+
+int
+main (int argc, char **argv)
+{
+        enableRawMode();
+	initEditor();
+
+        while(1)
+        {
+                editorRefreshScreen();
+                char c= '\0';
+                if(read(STDIN_FILENO, &c, 1) == -1) 
+		{
+			die("read");
+		}
+                if (c == 'q')
+                {
+                        editorRefreshScreen();
+                        break;
+                }
+        }
+        return EXIT_SUCCESS;
+}
+
