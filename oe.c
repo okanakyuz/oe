@@ -161,7 +161,21 @@ initEditor(void)
 	signal(SIGWINCH, handle_sigwinch);
 }
 
-
+char 
+editorReadKey(void)
+{
+	int nread;
+	char c;
+	while ((nread = read(STDIN_FILENO, &c, 1)) != 1)
+	{
+		if (nread == -1)
+		{
+			if (errno == EINTR) return '\0';
+			if (errno != EAGAIN) die("read");
+		}
+	}
+	return c;
+}
 
 int
 main (int argc, char **argv)
@@ -172,14 +186,8 @@ main (int argc, char **argv)
         while(1)
         {
                 editorRefreshScreen();
-                char c= '\0';
-                if(read(STDIN_FILENO, &c, 1) == -1) 
-		{
-			if (errno == EINTR)
-			{
-				die("read");
-			}
-		}
+                char c = editorReadKey();
+                if (c == '\0') continue; 
                 if (c == 'q')
                 {
                         editorRefreshScreen();
