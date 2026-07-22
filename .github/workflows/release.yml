@@ -33,19 +33,16 @@ jobs:
     strategy:
       matrix:
         include:
-          # Standart PC'ler (Intel/AMD)
           - arch: amd64
             cross_host: ""
             compiler: gcc
             deb_arch: amd64
             rpm_arch: x86_64
-          # ARM Tabanlı Cihazlar (Raspberry Pi, ARM Sunucular)
           - arch: arm64
             cross_host: aarch64-linux-gnu
             compiler: aarch64-linux-gnu-gcc
             deb_arch: arm64
             rpm_arch: aarch64
-          # RISC-V Mimarisi
           - arch: riscv64
             cross_host: riscv64-linux-gnu
             compiler: riscv64-linux-gnu-gcc
@@ -57,7 +54,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y autoconf automake build-essential ruby ruby-dev rubygems rpm \
-               gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu
+               gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu libarchive-tools
           sudo gem install fpm
       - name: Compile and Stage
         run: |
@@ -70,7 +67,6 @@ jobs:
           fi
           
           make
-          # FPM paketleme işlemi için geçici klasöre kur
           make DESTDIR=/tmp/oe-staging install
       - name: Generate Packages with FPM
         run: |
