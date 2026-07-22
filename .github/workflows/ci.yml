@@ -20,6 +20,19 @@ jobs:
         ./configure
         make
 
+  build-macos:
+    name: Build (macOS)
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Dependencies (Homebrew)
+      run: brew install autoconf automake
+    - name: Build with Autotools
+      run: |
+        autoreconf -i
+        ./configure
+        make
+
   build-containers:
     name: Build (Container - ${{ matrix.container }})
     runs-on: ubuntu-latest
