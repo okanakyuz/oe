@@ -15,6 +15,7 @@ rm -f depcomp
 rm -f install-sh
 rm -f missing
 rm -f compile
+rm -f *.tar.gz
 
 find . -type f -name "*~" -exec rm -f {} +
 find . -type f -name "*.o" -exec rm -f {} +
