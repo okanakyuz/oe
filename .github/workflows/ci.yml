@@ -45,7 +45,7 @@ jobs:
       run: |
         dnf install -y gcc make autoconf automake findutils
         autoreconf -i && ./configure && make
-
+  
   build-bsd:
     name: Build (${{ matrix.os }} ${{ matrix.version }})
     runs-on: ubuntu-latest
@@ -54,11 +54,14 @@ jobs:
       matrix:
         include:
           - os: freebsd
-            version: '13.2'
+            version: '13.3'
+            install: 'sudo pkg install -y autoconf automake'
           - os: openbsd
-            version: '7.4'
+            version: '7.5'
+            install: 'doas pkg_add -I autoconf-2.71 automake-1.16.5'
           - os: netbsd
             version: '9.3'
+            install: 'sudo pkgin -y install autoconf automake'
     steps:
     - uses: actions/checkout@v4
     - name: Setup and Build on BSD
@@ -68,21 +71,14 @@ jobs:
         version: ${{ matrix.version }}
         memory: 2G
         run: |
-          case "${{ matrix.os }}" in
-            freebsd)
-              sudo pkg install -y autoconf automake
-              ;;
-            openbsd)
-              # -I parametresi OpenBSD'de etkileşimli (interactive) soruları atlar
-              sudo pkg_add -I autoconf automake
-              # OpenBSD için zorunlu Autotools sürüm tanımlamaları
-              export AUTOCONF_VERSION=2.71
-              export AUTOMAKE_VERSION=1.16
-              ;;
-            netbsd)
-              sudo pkgin -y install autoconf automake || sudo pkg_add autoconf automake
-              ;;
-          esac
+          # Matrix'ten gelen OS'e özel kurulum komutu (OpenBSD için doas)
+          ${{ matrix.install }}
+          
+          # OpenBSD'de autotools wrapper'larının çalışması için zorunlu değişkenler
+          if [ "${{ matrix.os }}" = "openbsd" ]; then
+            export AUTOCONF_VERSION=2.71
+            export AUTOMAKE_VERSION=1.16
+          fi
           
           autoreconf -i
           ./configure
