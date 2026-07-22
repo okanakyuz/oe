@@ -45,8 +45,8 @@ jobs:
       run: |
         dnf install -y gcc make autoconf automake findutils
         autoreconf -i && ./configure && make
- 
-  build-bsd:
+
+build-bsd:
     name: Build (${{ matrix.os }} ${{ matrix.version }})
     runs-on: ubuntu-latest
     strategy:
@@ -56,12 +56,26 @@ jobs:
           - os: freebsd
             version: '13.3'
             install: 'sudo pkg install -y autoconf automake'
+            build: |
+              autoreconf -i
+              ./configure
+              make
           - os: openbsd
             version: '7.5'
             install: 'sudo pkg_add -I autoconf-2.71 automake-1.16.5'
+            build: |
+              export AUTOCONF_VERSION=2.71
+              export AUTOMAKE_VERSION=1.16
+              autoreconf -i
+              ./configure
+              make
           - os: netbsd
             version: '9.3'
             install: 'sudo pkgin -y install autoconf automake'
+            build: |
+              autoreconf -i
+              ./configure
+              make
     steps:
     - uses: actions/checkout@v4
     - name: Setup and Build on BSD
@@ -71,11 +85,5 @@ jobs:
         version: ${{ matrix.version }}
         memory: 2G
         run: |
-          sh -e -c '
-            ${{ matrix.install }}
-            export AUTOCONF_VERSION=2.71
-            export AUTOMAKE_VERSION=1.16
-            autoreconf -i
-            ./configure
-            make
-          ' 
+          ${{ matrix.install }}
+          ${{ matrix.build }} 
