@@ -45,7 +45,7 @@ jobs:
       run: |
         dnf install -y gcc make autoconf automake findutils
         autoreconf -i && ./configure && make
-
+  
   build-bsd:
     name: Build (${{ matrix.os }} ${{ matrix.version }})
     runs-on: ubuntu-latest
@@ -68,8 +68,12 @@ jobs:
         version: ${{ matrix.version }}
         memory: 2G
         run: |
-          if command -v pkg &> /dev/null; then sudo pkg install -y autoconf automake gmake; fi
-          if command -v pkg_add &> /dev/null; then sudo pkg_add autoconf automake gmake; fi
+          # Sadece Autotools kuruyoruz, gmake hilesi yok
+          if command -v pkg >/dev/null 2>&1; then pkg install -y autoconf automake; fi
+          if command -v pkg_add >/dev/null 2>&1; then pkg_add autoconf automake; fi
+          
           autoreconf -i || true
           ./configure || true
-          gmake || make || true
+          
+          make || true
+
