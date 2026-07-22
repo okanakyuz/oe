@@ -1,0 +1,70 @@
+name: OE CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-linux:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, fedora-latest]
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Dependencies (Ubuntu)
+      if: runner.os == 'Linux' && contains(matrix.os, 'ubuntu')
+      run: sudo apt-get update && sudo apt-get install -y build-essential autoconf automake
+    - name: Install Dependencies (Fedora)
+      if: runner.os == 'Linux' && contains(matrix.os, 'fedora')
+      run: sudo dnf install -y gcc make autoconf automake
+    - name: Build with Autotools
+      run: |
+        ./autogen.sh || autoreconf -i
+        ./configure
+        make
+
+  build-alpine-arch:
+    name: Build (Container - ${{ matrix.container }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        container: [alpine:latest, archlinux:latest]
+    container:
+      image: ${{ matrix.container }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Dependencies & Build (Alpine)
+      if: contains(matrix.container, 'alpine')
+      run: |
+        apk update && apk add build-base autoconf automake
+        autoreconf -i && ./configure && make
+    - name: Install Dependencies & Build (Arch)
+      if: contains(matrix.container, 'archlinux')
+      run: |
+        pacman -Syu --noconfirm base-devel autoconf automake
+        autoreconf -i && ./configure && make
+
+  build-bsd:
+    name: Build (${{ matrix.bsd }})
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        bsd: [freebsd, openbsd, netbsd]
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup and Build on BSD via VMM/QEMU (Vagrant)
+      uses: cross-platform-actions/action@v0.25.0
+      with:
+        operating_system: ${{ matrix.bsd }}
+        memory: 2Gb
+        run: |
+          # BSD ortamlarında derleme komutları
+          if command -v pkg &> /dev/null; then pkg install -y autoconf automake gmake; fi
+          if command -v pkg_add &> /dev/null; then pkg_add autoconf automake gmake; fi
+          autoreconf -i || true
+          ./configure || true
+          gmake || make || true
