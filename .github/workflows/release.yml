@@ -11,7 +11,6 @@ permissions:
 
 jobs:
   build-source:
-    name: Build Source Tarball (For BSD & MacOS)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,7 +28,6 @@ jobs:
           path: "*.tar.gz"
 
   build-linux-packages:
-    name: Build Packages (${{ matrix.arch }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -89,7 +87,6 @@ jobs:
             *.pkg.tar.zst
 
   build-extra-ecosystems:
-    name: Build Extra Ecosystems (Void, Gentoo, FreeBSD & Docker)
     needs: [build-source]
     runs-on: ubuntu-latest
     steps:
@@ -101,6 +98,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+          
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
@@ -153,21 +151,6 @@ jobs:
           distfiles="https://github.com/${{ github.repository }}/archive/refs/tags/v\${version}.tar.gz"
           EOF
 
-      - name: Build FreeBSD Native Package
-        uses: cross-platform-actions/action@v0.25.0
-        with:
-          operating_system: freebsd
-          version: '13.3'
-          memory: 2G
-          run: |
-            sudo pkg install -y autoconf automake pkgconf
-            autoreconf -i
-            ./configure
-            make
-            make DESTDIR=/tmp/freebsd-stage install
-            pkg create -r /tmp/freebsd-stage -o /tmp/
-            cp /tmp/*.txz $GITHUB_WORKSPACE/extra-dist/
-
       - name: Upload Extra Ecosystem Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -175,7 +158,6 @@ jobs:
           path: extra-dist/*
 
   publish-release:
-    name: Publish to GitHub Releases
     needs: [build-source, build-linux-packages, build-extra-ecosystems]
     runs-on: ubuntu-latest
     steps:
