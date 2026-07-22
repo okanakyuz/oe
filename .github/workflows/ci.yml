@@ -45,6 +45,56 @@ jobs:
       run: |
         dnf install -y gcc make autoconf automake findutils
         autoreconf -i && ./configure && make
+
+  build-bsd:
+    name: Build (${{ matrix.os }} ${{ matrix.version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: freebsd
+            version: '13.2'
+          - os: openbsd
+            version: '7.4'
+          - os: netbsd
+            version: '9.3'
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup and Build on BSD
+      uses: cross-platform-actions/action@v0.25.0
+      with:
+        operating_system: ${{ matrix.os }}
+        version: ${{ matrix.version }}
+        memory: 2G
+        run: |
+          case "${{ matrix.os }}" in
+            freebsd)
+              sudo pkg install -y autoconf automake
+              ;;
+            openbsd)
+              sudo pkg_add -I autoconf automake
+              export AUTOCONF_VERSION=2.71
+              export AUTOMAKE_VERSION=1.16
+              ;;
+            netbsd)
+              sudo pkgin -y install autoconf automake || sudo pkg_add autoconf automake
+              ;;
+          esac
+          
+          autoreconf -i
+          ./configure
+          make
+
+
+
+
+
+
+
+
+
+
   
   build-bsd:
     name: Build (${{ matrix.os }} ${{ matrix.version }})
