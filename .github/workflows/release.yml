@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   build-source:
@@ -59,20 +60,17 @@ jobs:
       - name: Compile and Stage
         run: |
           ./autogen.sh || autoreconf -i
-          
           if [ -n "${{ matrix.cross_host }}" ]; then
             ./configure --host=${{ matrix.cross_host }} CC=${{ matrix.compiler }}
           else
             ./configure
           fi
-          
           make
           make DESTDIR=/tmp/oe-staging install
       - name: Generate Packages with FPM
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
           cd /tmp/oe-staging
-          
           DEB_ARCH=${{ matrix.deb_arch }}
           RPM_ARCH=${{ matrix.rpm_arch }}
           
@@ -90,9 +88,95 @@ jobs:
             *.apk
             *.pkg.tar.zst
 
+  build-extra-ecosystems:
+    name: Build Extra Ecosystems (Void, Gentoo, FreeBSD & Docker)
+    needs: [build-source]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+
+      - name: Generate Gentoo Ebuild
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          mkdir -p extra-dist
+          cat << EOF > extra-dist/oe-${VERSION}.ebuild
+          EAPI=8
+          DESCRIPTION="Minimalist C terminal text editor"
+          HOMEPAGE="https://github.com/${{ github.repository }}"
+          SRC_URI="https://github.com/${{ github.repository }}/archive/refs/tags/v\${PV}.tar.gz -> \${P}.tar.gz"
+          LICENSE="MIT"
+          SLOT="0"
+          KEYWORDS="~amd64 ~arm64 ~riscv64"
+          DEPEND="sys-devel/autoconf sys-devel/automake"
+          src_prepare() {
+              default
+              ./autogen.sh || autoreconf -i
+          }
+          src_configure() {
+              econf
+          }
+          src_compile() {
+              emake
+          }
+          src_install() {
+              emake DESTDIR="\${D}" install
+          }
+          EOF
+
+      - name: Generate Void Linux Template
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          cat << EOF > extra-dist/void-template-${VERSION}
+          pkgname=oe
+          version=${VERSION}
+          revision=1
+          build_style=gnu-configure
+          short_desc="Minimalist C terminal text editor"
+          maintainer="Okan Akyuz <okanakyuz@users.noreply.github.com>"
+          license="MIT"
+          homepage="https://github.com/${{ github.repository }}"
+          distfiles="https://github.com/${{ github.repository }}/archive/refs/tags/v\${version}.tar.gz"
+          EOF
+
+      - name: Build FreeBSD Native Package
+        uses: cross-platform-actions/action@v0.25.0
+        with:
+          operating_system: freebsd
+          version: '13.3'
+          memory: 2G
+          run: |
+            sudo pkg install -y autoconf automake pkgconf
+            autoreconf -i
+            ./configure
+            make
+            make DESTDIR=/tmp/freebsd-stage install
+            pkg create -r /tmp/freebsd-stage -o /tmp/
+            cp /tmp/*.txz $GITHUB_WORKSPACE/extra-dist/
+
+      - name: Upload Extra Ecosystem Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: oe-extra-dist
+          path: extra-dist/*
+
   publish-release:
     name: Publish to GitHub Releases
-    needs: [build-source, build-linux-packages]
+    needs: [build-source, build-linux-packages, build-extra-ecosystems]
     runs-on: ubuntu-latest
     steps:
       - name: Download All Artifacts
