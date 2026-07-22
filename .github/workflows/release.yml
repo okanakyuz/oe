@@ -1,0 +1,111 @@
+name: Release OE
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-source:
+    name: Build Source Tarball (For BSD & MacOS)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Dependencies
+        run: sudo apt-get update && sudo apt-get install -y autoconf automake build-essential
+      - name: Generate Tarball
+        run: |
+          ./autogen.sh || autoreconf -i
+          ./configure
+          make dist
+      - name: Upload Source Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: oe-source
+          path: "*.tar.gz"
+
+  build-linux-packages:
+    name: Build Packages (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Standart PC'ler (Intel/AMD)
+          - arch: amd64
+            cross_host: ""
+            compiler: gcc
+            deb_arch: amd64
+            rpm_arch: x86_64
+          # ARM Tabanlı Cihazlar (Raspberry Pi, ARM Sunucular)
+          - arch: arm64
+            cross_host: aarch64-linux-gnu
+            compiler: aarch64-linux-gnu-gcc
+            deb_arch: arm64
+            rpm_arch: aarch64
+          # RISC-V Mimarisi
+          - arch: riscv64
+            cross_host: riscv64-linux-gnu
+            compiler: riscv64-linux-gnu-gcc
+            deb_arch: riscv64
+            rpm_arch: riscv64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Build Dependencies & FPM
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf automake build-essential ruby ruby-dev rubygems rpm \
+               gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu
+          sudo gem install fpm
+      - name: Compile and Stage
+        run: |
+          ./autogen.sh || autoreconf -i
+          
+          if [ -n "${{ matrix.cross_host }}" ]; then
+            ./configure --host=${{ matrix.cross_host }} CC=${{ matrix.compiler }}
+          else
+            ./configure
+          fi
+          
+          make
+          # FPM paketleme işlemi için geçici klasöre kur
+          make DESTDIR=/tmp/oe-staging install
+      - name: Generate Packages with FPM
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          cd /tmp/oe-staging
+          
+          DEB_ARCH=${{ matrix.deb_arch }}
+          RPM_ARCH=${{ matrix.rpm_arch }}
+          
+          fpm -s dir -t deb -a $DEB_ARCH -n oe -v $VERSION -p $GITHUB_WORKSPACE/oe_${VERSION}_${DEB_ARCH}.deb usr
+          fpm -s dir -t rpm -a $RPM_ARCH -n oe -v $VERSION -p $GITHUB_WORKSPACE/oe-${VERSION}-${RPM_ARCH}.rpm usr
+          fpm -s dir -t apk -a $RPM_ARCH -n oe -v $VERSION -p $GITHUB_WORKSPACE/oe-${VERSION}-${RPM_ARCH}.apk usr
+          fpm -s dir -t pacman -a $RPM_ARCH -n oe -v $VERSION -p $GITHUB_WORKSPACE/oe-${VERSION}-${RPM_ARCH}.pkg.tar.zst usr
+      - name: Upload Package Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: oe-packages-${{ matrix.arch }}
+          path: |
+            *.deb
+            *.rpm
+            *.apk
+            *.pkg.tar.zst
+
+  publish-release:
+    name: Publish to GitHub Releases
+    needs: [build-source, build-linux-packages]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
