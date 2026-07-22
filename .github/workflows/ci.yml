@@ -46,7 +46,7 @@ jobs:
         dnf install -y gcc make autoconf automake findutils
         autoreconf -i && ./configure && make
 
-build-bsd:
+  build-bsd:
     name: Build (${{ matrix.os }} ${{ matrix.version }})
     runs-on: ubuntu-latest
     strategy:
